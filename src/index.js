@@ -6,8 +6,28 @@ const { expressMiddleware } = require("@apollo/server/express4");
 const connectDB = require("./config/mongodb");
 const userSchema = require("./graphql/schemas/UserSchema");
 const userResolver = require("./graphql/resolvers/UserResolver");
+const postSchema = require("./graphql/schemas/PostSchema");
+const postResolver = require("./graphql/resolvers/PostResolver");
+const { gql } = require("graphql-tag");
 const getCurrentUserContext = require("./middlewares/AuthenticateUsersContext");
 const app = express();
+
+// Combine schemas
+const typeDefs = gql`
+  ${userSchema}
+  ${postSchema}
+`;
+// Combine resolvers
+const resolvers = {
+  Query: {
+    ...userResolver.Query,
+    ...postResolver.Query,
+  },
+  Mutation: {
+    ...userResolver.Mutation,
+    ...postResolver.Mutation,
+  },
+};
 
 (async () => {
   try {
@@ -15,8 +35,8 @@ const app = express();
     console.log("Database connected successfully.");
 
     const server = new ApolloServer({
-      typeDefs: userSchema,
-      resolvers: userResolver,
+      typeDefs,
+      resolvers,
     });
 
     await server.start();

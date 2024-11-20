@@ -1,16 +1,45 @@
 const bcrypt = require("bcryptjs");
 const userModel = require("../../models/UserModel");
 const generateAccessToken = require("../../utils/JWT");
+const mongoose = require("mongoose");
 
 const userResolver = {
   Query: {
     // Fetch user by ID
     getUser: async (_, { id }) => {
-      return await userModel.findById(id);
+      try {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+          return null;
+        }
+        const user = await userModel
+          .findById(id)
+          .populate("followers", "username")
+          .populate("following", "username");
+        if (!user) {
+          return null;
+        }
+        return user;
+      } catch (error) {
+        console.error("Error fetching user:", error.message);
+        return null;
+      }
     },
+    // Get Current user based on the authorization header Bearer <access_token>
     currentUser: async (_, __, { user }) => {
-      if (!user) throw new Error("Not authenticated");
-      return await userModel.findById(user.id);
+      try {
+        const currentUser = await userModel
+          .findById(user._id)
+          .populate("followers", "username")
+          .populate("following", "username");
+        if (!currentUser) {
+          return null;
+        }
+        console.log(currentUser);
+        return currentUser;
+      } catch (error) {
+        console.error("An error occurred", error);
+        return null;
+      }
     },
   },
 
@@ -51,7 +80,7 @@ const userResolver = {
         return {
           accessToken: "",
           user: null,
-          message: "Error! There is not accout found with this email address",
+          message: "Error! There is not account found with this email address",
         };
       }
 
@@ -73,6 +102,43 @@ const userResolver = {
         message: "Signed In successfully..",
       };
     },
+    followUser: async (_, { userId }, { user }) => {
+      try {
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+          return null;
+        }
+        // finding the user who current user want to follow...
+        const targetUser = await userModel.findById(userId);
+        if (!targetUser) {
+          throw new Error("User to follow not found");
+        }
+        // Prevent self-following
+        if (user.id === userId) {
+          throw new Error("You cannot follow yourself");
+        }
+
+        // Update the target user's followers and current user's following
+        await userModel.findByIdAndUpdate(userId, {
+          $addToSet: { followers: user.id },
+        });
+        const updatedCurrentUser = await userModel
+          .findByIdAndUpdate(
+            user.id,
+            {
+              $addToSet: { following: userId },
+            },
+            { new: true }
+          )
+          .populate("followers", "username email")
+          .populate("following", "username email");
+        console.log(updatedCurrentUser);
+        return updatedCurrentUser;
+      } catch (error) {
+        console.error("error occurred", error);
+        return null;
+      }
+    },
+    unfollowUser: async (_, { userId }, { user }) => {},
   },
 };
 
