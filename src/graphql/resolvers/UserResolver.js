@@ -138,7 +138,41 @@ const userResolver = {
         return null;
       }
     },
-    unfollowUser: async (_, { userId }, { user }) => {},
+    unfollowUser: async (_, { userId }, { user }) => {
+      try {
+        // Check if the target user exists
+        const targetUser = await userModel.findById(userId);
+        if (!targetUser) {
+          throw new Error("User to unfollow not found");
+        }
+
+        // Prevent self-unfollowing
+        if (user.id === userId) {
+          throw new Error("You cannot unfollow yourself");
+        }
+
+        // Remove current user from the target user's followers
+        await userModel.findByIdAndUpdate(userId, {
+          $pull: { followers: user.id },
+        });
+        // Remove target user from the current user's following
+        const updatedCurrentUser = await userModel
+          .findByIdAndUpdate(
+            user.id,
+            {
+              $pull: { following: userId },
+            },
+            { new: true }
+          )
+          .populate("followers", "username email")
+          .populate("following", "username email");
+
+        return updatedCurrentUser;
+      } catch (error) {
+        console.error("error occurred", error);
+        return null;
+      }
+    },
   },
 };
 
